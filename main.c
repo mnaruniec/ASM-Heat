@@ -3,9 +3,9 @@
 
 const size_t F = sizeof(float);
 
-extern void start(int width, int height, float *matrix, float *heaters, float *coolers, float weight) {}
+extern void start(int width, int height, float *matrix, float *heaters, float *coolers, float weight);
 
-extern void step() {}
+extern void step();
 
 
 // [beg; end)
@@ -16,32 +16,33 @@ static void print_range(float *beg, float *end) {
 }
 
 
-static void print_state(int width, int height, float *matrix, float *heaters, float *coolers, int steps_done) {
+static void print_state(int width, int height, float *matrix, int steps_done) {
+    int true_width = (width + 4);
+
     printf("After %d steps:\n\n", steps_done);
-    printf("X ");
-    print_range(heaters, heaters + width);
-    printf("X\n\n");
+    printf("X  |  ");
+    print_range(matrix + 1, matrix + width + 1);
+    printf(" |  X\n\n");
 
     for(int row = 0; row < height; row++) {
-        printf("%f  |  ", coolers[row]);
-        print_range(matrix + row * width, matrix + (row + 1) * width);
-        printf(" |  %f\n", coolers[row]);
+        printf("%f  |  ", matrix[(row + 1) * true_width]);
+        print_range(matrix + (row + 1) * true_width + 1, matrix + (row + 1) * true_width + width + 1);
+        printf(" |  %f\n", matrix[(row + 1) * true_width]);
 
     }
 
-    printf("\nX ");
-    print_range(heaters, heaters + width);
-    printf("X\n\n\n");
+    printf("\nX  |  ");
+    print_range(matrix + 1, matrix + width + 1);
+    printf(" |  X\n\n\n");
 }
 
 
 int main(int argc, char **argv) {
     int retval = 1;
     float weight;
-    int height, width, steps;
+    int height, width, steps, true_size, true_width;
     FILE *file;
     float *matrix = NULL;
-    float *heaters = NULL;
     float *coolers = NULL;
 
     if(argc < 4) {
@@ -66,23 +67,37 @@ int main(int argc, char **argv) {
         goto close_file;
     }
 
-    if(!(matrix = malloc(F * width * height)) || !(heaters = malloc(F * width)) || !(coolers = malloc(F * height))) {
+    true_width = (width + 4);
+    true_size = true_width * (height * 2 + 2);
+    if(true_size <= 0) {
+        printf("incorrect matrix size");
+    }
+
+    if(!(matrix = malloc(F * true_size))
+       || !(coolers = malloc(F * height))) {
         perror("malloc");
         goto free_buffers;
     }
 
-    for (size_t i = 0; i < width * height; i++) {
-        if(1 > fscanf(file, "%f", matrix + i)) {
-            printf("incorrect input file");
-            goto free_buffers;
+    for(int i = 0; i < true_size; i++) {
+        matrix[i] = 0.0;
+    }
+
+    for(int row = 0; row < height; row++) {
+        for(int col = 0; col < width; col++) {
+            if(1 > fscanf(file, "%f", matrix + (row + 1) * true_width + col + 1)) {
+                printf("incorrect input file");
+                goto free_buffers;
+            }
         }
     }
 
     for (size_t i = 0; i < width; i++) {
-        if(1 > fscanf(file, "%f", heaters + i)) {
+        if(1 > fscanf(file, "%f", matrix + i + 1)) {
             printf("incorrect input file");
             goto free_buffers;
         }
+        matrix[(height + 1) * true_width + i + 1] = matrix[i + 1];
     }
 
     for (size_t i = 0; i < height; i++) {
@@ -90,16 +105,28 @@ int main(int argc, char **argv) {
             printf("incorrect input file");
             goto free_buffers;
         }
+        matrix[(i + 1) * true_width] = matrix[(i + 1) * true_width + width + 1] = coolers[i];
     }
 
-    start(width, height, matrix, heaters, coolers, weight);
+    start(width, height, matrix, matrix + 1, coolers, weight);
 
-    print_state(width, height, matrix, heaters, coolers, 0);
+    print_state(width, height, matrix, 0);
+
+
+    for(int i = 0; i < true_size; i++) {
+        if(i % true_width == 0) printf("\n");
+        printf("%f ", matrix[i]);
+    }
 
     for(int i = 0; i < steps; i++) {
         while(getchar()!='\n');
         step();
-        print_state(width, height, matrix, heaters, coolers, i + 1);
+        print_state(width, height, matrix, i + 1);
+
+        for(int i = 0; i < true_size; i++) {
+            if(i % true_width == 0) printf("\n");
+            printf("%f ", matrix[i]);
+        }
     }
 
 
@@ -107,7 +134,6 @@ int main(int argc, char **argv) {
 
     free_buffers:
         free(matrix);
-        free(heaters);
         free(coolers);
     close_file:
         fclose(file);
