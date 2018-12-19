@@ -1,7 +1,11 @@
+; author: Michal Naruniec (mn360386)
+; Assembly Language Programming assignment #2
+
 global start
 global step
 
 section .bss
+
     WIDTH resb 4
     HEIGHT resb 4
     TRUE_WIDTH resb 4
@@ -91,5 +95,43 @@ next_row_delta:
     cmp r9, rax
     jl process_elem_delta ; if (curr_row < height) continue the loop
 
+
 prepare_result:
+    mov rsi, [MATRIX] ; current element ptr
+    lea rsi, [rsi + rdx + 4] ; first element
+
+
+    mov rdi, [DELTA] ; current element's delta ptr
+    lea rdi, [rdi + 4]
+
+    lea r8, [rsi + rcx] ; behind-last element ptr in current row
+
+    mov r9, 0 ; current row
+
+process_4_elems_result:
+    movups xmm0, [rsi] ; load 4 matrix elements
+    movups xmm1, [rdi] ; load 4 delta elements
+    addps xmm0, xmm1
+    movups [rsi], xmm0 ; put 4 result elements back to matrix
+
+next_4_elems_result:
+    add rsi, 4 * 4
+    add rdi, 4 * 4 ; move 4 elements to the right
+
+    cmp rsi, r8
+    jb process_4_elems_result ; if (curr_ptr < behind_last_ptr) do not change row
+
+next_row_result:
+    sub rsi, r8 ; calculate how far we are from behind-last element in bytes
+    sub rdi, rsi ; move delta ptr back to behind-last element
+    mov rsi, r8 ; move matrix ptr back to behind-last element
+
+    add rsi, 4 * 4 ; skip 2 terminating guards and left cooler
+    add rdi, 4 * 4
+    lea r8, [rsi + rcx] ; set new behind-last element ptr
+
+    inc r9
+    cmp r9, rax
+    jl process_4_elems_result ; if (curr_row < height) continue the loop
+
     ret
